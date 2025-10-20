@@ -1,22 +1,20 @@
-// app.js — versão VS ALPHA (Render + Z-API + OpenAI com variáveis nomeadas igual ao painel)
+// app.js — versão VS ALPHA (corrigida com URL completa da Z-API)
 import express from "express";
 import axios from "axios";
 
 const app = express();
 app.use(express.json());
 
-// 🔐 Variáveis de ambiente (nomes idênticos aos da Z-API e OpenAI)
-const ID_INSTANCE = process.env.ID_INSTANCE;            // ID da instância Z-API
-const TOKEN_INSTANCE = process.env.TOKEN_INSTANCE;      // Token da instância Z-API
-const TOKEN_GPT = process.env.TOKEN_GPT;                // Token da OpenAI (sk-...)
+// 🔐 Variáveis do Render
+const API_ZAPI = process.env.API_ZAPI; // URL completa da API da instância
+const TOKEN_GPT = process.env.TOKEN_GPT; // Token da OpenAI (sk-...)
 
-
-// 🧠 Webhook: recebe mensagens do WhatsApp e responde com ChatGPT
+// 🧠 Webhook: recebe mensagens e responde com ChatGPT
 app.post("/webhook", async (req, res) => {
   try {
     const body = req.body;
 
-    // 📩 Extrai telefone e texto da mensagem (formato novo da Z-API)
+    // 📩 Extrai número e texto (compatível com todos formatos da Z-API)
     const phone =
       body?.phone ||
       body?.message?.phone ||
@@ -38,7 +36,7 @@ app.post("/webhook", async (req, res) => {
 
     console.log(`📩 Mensagem recebida de ${phone}: ${message}`);
 
-    // 🧠 Gera resposta com o ChatGPT (modelo gpt-4o-mini)
+    // 🧠 Gera resposta com a OpenAI
     const gptResponse = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -48,7 +46,7 @@ app.post("/webhook", async (req, res) => {
             role: "system",
             content:
               "Você é o agente virtual da VS ALPHA — Impulsionando Resultados. \
-              Fale como se estivesse no WhatsApp, com simpatia, clareza e profissionalismo. \
+              Fale como se estivesse no WhatsApp, com simpatia e profissionalismo. \
               Seja breve e natural. \
               Caso perguntem sobre serviços, explique que a VS ALPHA atua com gestão de pessoas nas áreas de logística, limpeza, recepção e apoio operacional."
           },
@@ -66,14 +64,11 @@ app.post("/webhook", async (req, res) => {
     const reply = gptResponse.data.choices[0].message.content.trim();
     console.log(`💬 Resposta da IA: ${reply}`);
 
-    // 📤 Envia a resposta pelo WhatsApp via Z-API
-    const zapiUrl = `https://api.z-api.io/instances/${ID_INSTANCE}/token/${TOKEN_INSTANCE}/send-text`;
-    const zapiPayload = {
+    // 📤 Envia resposta pelo WhatsApp (usando a URL completa da Z-API)
+    await axios.post(API_ZAPI, {
       phone: phone,
       message: reply
-    };
-
-    await axios.post(zapiUrl, zapiPayload);
+    });
 
     console.log(`✅ Mensagem enviada para ${phone}`);
     res.sendStatus(200);
