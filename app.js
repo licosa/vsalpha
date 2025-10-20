@@ -1,20 +1,21 @@
-// app.js — versão VS ALPHA (corrigida com URL completa da Z-API)
+// app.js — versão FINAL VS ALPHA com Client-Token Z-API + Segurança
 import express from "express";
 import axios from "axios";
 
 const app = express();
 app.use(express.json());
 
-// 🔐 Variáveis do Render
-const API_ZAPI = process.env.API_ZAPI; // URL completa da API da instância
-const TOKEN_GPT = process.env.TOKEN_GPT; // Token da OpenAI (sk-...)
+// 🔐 Variáveis de ambiente (Render)
+const API_ZAPI = process.env.API_ZAPI;               // URL completa da instância (https://api.z-api.io/instances/.../send-text)
+const CLIENT_TOKEN_ZAPI = process.env.CLIENT_TOKEN_ZAPI; // Client Token gerado em "Segurança" na Z-API
+const TOKEN_GPT = process.env.TOKEN_GPT;             // Chave da OpenAI (sk-proj-...)
 
-// 🧠 Webhook: recebe mensagens e responde com ChatGPT
+// 🧠 Webhook: recebe mensagens do WhatsApp e responde via ChatGPT
 app.post("/webhook", async (req, res) => {
   try {
     const body = req.body;
 
-    // 📩 Extrai número e texto (compatível com todos formatos da Z-API)
+    // 📩 Extrai telefone e texto da mensagem (cobre diferentes formatos da Z-API)
     const phone =
       body?.phone ||
       body?.message?.phone ||
@@ -29,6 +30,19 @@ app.post("/webhook", async (req, res) => {
       body?.data?.message?.text ||
       body?.data?.message?.body;
 
+    const isGroup =
+      body?.isGroup ||
+      body?.message?.isGroup ||
+      body?.data?.message?.isGroup ||
+      false;
+
+    // 🚫 Ignora mensagens de grupos
+    if (isGroup) {
+      console.log(`🚫 Mensagem ignorada (grupo detectado): ${phone}`);
+      return res.sendStatus(200);
+    }
+
+    // Ignora se não tiver mensagem válida
     if (!phone || !message) {
       console.log("Mensagem inválida recebida:", req.body);
       return res.sendStatus(200);
@@ -36,7 +50,7 @@ app.post("/webhook", async (req, res) => {
 
     console.log(`📩 Mensagem recebida de ${phone}: ${message}`);
 
-    // 🧠 Gera resposta com a OpenAI
+    // 🧠 Chama a OpenAI para gerar resposta
     const gptResponse = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -46,7 +60,7 @@ app.post("/webhook", async (req, res) => {
             role: "system",
             content:
               "Você é o agente virtual da VS ALPHA — Impulsionando Resultados. \
-              Fale como se estivesse no WhatsApp, com simpatia e profissionalismo. \
+              Fale como se estivesse no WhatsApp, com simpatia, clareza e profissionalismo. \
               Seja breve e natural. \
               Caso perguntem sobre serviços, explique que a VS ALPHA atua com gestão de pessoas nas áreas de logística, limpeza, recepção e apoio operacional."
           },
@@ -64,11 +78,19 @@ app.post("/webhook", async (req, res) => {
     const reply = gptResponse.data.choices[0].message.content.trim();
     console.log(`💬 Resposta da IA: ${reply}`);
 
-    // 📤 Envia resposta pelo WhatsApp (usando a URL completa da Z-API)
-    await axios.post(API_ZAPI, {
-      phone: phone,
-      message: reply
-    });
+    // 📤 Envia a resposta pelo WhatsApp via Z-API (com Client Token)
+    await axios.post(
+      API_ZAPI,
+      {
+        phone,
+        message: reply
+      },
+      {
+        headers: {
+          "Client-Token": CLIENT_TOKEN_ZAPI
+        }
+      }
+    );
 
     console.log(`✅ Mensagem enviada para ${phone}`);
     res.sendStatus(200);
