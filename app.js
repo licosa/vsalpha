@@ -1,21 +1,22 @@
-// app.js — versão estável VS ALPHA (Render + Z-API + OpenAI)
+// app.js — versão VS ALPHA (Render + Z-API + OpenAI com variáveis nomeadas igual ao painel)
 import express from "express";
 import axios from "axios";
 
 const app = express();
 app.use(express.json());
 
-// 🔐 Variáveis de ambiente do Render
-const ZAPI_INSTANCE = process.env.ZAPI_INSTANCE;
-const ZAPI_TOKEN = process.env.ZAPI_TOKEN;
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+// 🔐 Variáveis de ambiente (nomes idênticos aos da Z-API e OpenAI)
+const ID_INSTANCE = process.env.ID_INSTANCE;            // ID da instância Z-API
+const TOKEN_INSTANCE = process.env.TOKEN_INSTANCE;      // Token da instância Z-API
+const TOKEN_GPT = process.env.TOKEN_GPT;                // Token da OpenAI (sk-...)
+
 
 // 🧠 Webhook: recebe mensagens do WhatsApp e responde com ChatGPT
 app.post("/webhook", async (req, res) => {
   try {
     const body = req.body;
 
-    // 📩 Extrai telefone e texto (cobre todos os formatos possíveis da Z-API)
+    // 📩 Extrai telefone e texto da mensagem (formato novo da Z-API)
     const phone =
       body?.phone ||
       body?.message?.phone ||
@@ -37,7 +38,7 @@ app.post("/webhook", async (req, res) => {
 
     console.log(`📩 Mensagem recebida de ${phone}: ${message}`);
 
-    // 🧠 Gera resposta com a OpenAI
+    // 🧠 Gera resposta com o ChatGPT (modelo gpt-4o-mini)
     const gptResponse = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -56,7 +57,7 @@ app.post("/webhook", async (req, res) => {
       },
       {
         headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          Authorization: `Bearer ${TOKEN_GPT}`,
           "Content-Type": "application/json"
         }
       }
@@ -66,7 +67,7 @@ app.post("/webhook", async (req, res) => {
     console.log(`💬 Resposta da IA: ${reply}`);
 
     // 📤 Envia a resposta pelo WhatsApp via Z-API
-    const zapiUrl = `https://api.z-api.io/instances/${ZAPI_INSTANCE}/token/${ZAPI_TOKEN}/send-text`;
+    const zapiUrl = `https://api.z-api.io/instances/${ID_INSTANCE}/token/${TOKEN_INSTANCE}/send-text`;
     const zapiPayload = {
       phone: phone,
       message: reply
@@ -82,7 +83,7 @@ app.post("/webhook", async (req, res) => {
   }
 });
 
-// ⚙️ Porta (Render define via variável PORT)
+// ⚙️ Porta (Render define automaticamente)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
   console.log(`🚀 Servidor VS ALPHA rodando na porta ${PORT}`)
