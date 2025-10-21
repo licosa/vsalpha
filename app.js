@@ -1,36 +1,45 @@
-// app.js — versão estável VS ALPHA (corrigida para loops e pronta para integração externa)
+// app.js — versão VS ALPHA final com integração ao Google Sheets (base de conhecimento dinâmica)
 import express from "express";
 import axios from "axios";
 
 const app = express();
 app.use(express.json());
 
-// 🔐 Variáveis de ambiente (Render)
-const API_ZAPI = process.env.API_ZAPI;               // URL completa da Z-API (com /send-text)
+// 🔐 Variáveis (Render)
+const API_ZAPI = process.env.API_ZAPI;                 // URL completa da instância Z-API
 const CLIENT_TOKEN_ZAPI = process.env.CLIENT_TOKEN_ZAPI; // Token de segurança da Z-API
-const TOKEN_GPT = process.env.TOKEN_GPT;             // Chave da OpenAI
+const TOKEN_GPT = process.env.TOKEN_GPT;               // Chave da OpenAI
+const SHEET_ID = process.env.SHEET_ID;                 // ID da planilha do Google Sheets
 
-// 🧠 Memória simples de controle (para pausas e logs futuros)
-const atendimentos = {}; // {"5527999XXXX": {modo: "humano", expira: 123456789}}
+// 🧠 Função que busca dados da planilha pública do Google Sheets (em CSV)
+async function carregarBaseConhecimento() {
+  try {
+    const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv`;
+    const response = await axios.get(url);
+    return response.data;
+  } catch (error) {
+    console.error("❌ Erro ao carregar base de conhecimento:", error.message);
+    return "";
+  }
+}
 
-// 🛰️ Webhook: recebe mensagens e responde via ChatGPT
+// 📬 Webhook principal — recebe mensagens do WhatsApp e responde
 app.post("/webhook", async (req, res) => {
   try {
     const body = req.body;
 
-    // 🚫 1. Evita loop infinito — ignora mensagens enviadas pelo próprio número
+    // 🚫 Evita loop (mensagem enviada pela própria instância)
     if (body?.fromMe || body?.message?.fromMe) {
-      console.log("↩️ Mensagem ignorada (enviada pela própria instância).");
+      console.log("↩️ Ignorado: mensagem enviada pela própria instância.");
       return res.sendStatus(200);
     }
 
-    // 📩 2. Extrai telefone e texto
+    // 📩 Extrai número e texto
     const phone =
       body?.phone ||
       body?.message?.phone ||
       body?.data?.message?.phone ||
       body?.data?.phone;
-
     const message =
       body?.text?.message ||
       body?.message?.text ||
@@ -45,21 +54,24 @@ app.post("/webhook", async (req, res) => {
       body?.data?.message?.isGroup ||
       false;
 
-    // 🚫 3. Ignora grupos (confirmado funcionando)
+    // 🚫 Ignora grupos
     if (isGroup) {
-      console.log(`🚫 Mensagem ignorada (grupo detectado): ${phone}`);
+      console.log(`🚫 Ignorado (grupo detectado): ${phone}`);
       return res.sendStatus(200);
     }
 
-    // 🚫 4. Ignora mensagens vazias ou inválidas
+    // 🚫 Ignora mensagens inválidas
     if (!phone || !message) {
-      console.log("Mensagem inválida recebida:", req.body);
+      console.log("❌ Mensagem inválida recebida:", req.body);
       return res.sendStatus(200);
     }
 
     console.log(`📩 Mensagem recebida de ${phone}: ${message}`);
 
-    // 🧠 5. Gera resposta com a OpenAI
+    // 🧾 Busca a base de conhecimento atualizada do Google Sheets
+    const baseVSAlpha = await carregarBaseConhecimento();
+
+    // 🧠 Gera resposta usando GPT e o contexto da VS ALPHA
     const gptResponse = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -67,10 +79,11 @@ app.post("/webhook", async (req, res) => {
         messages: [
           {
             role: "system",
-            content:
-              "Você é o agente virtual da VS ALPHA — Impulsionando Resultados. \
-              Fale como se estivesse no WhatsApp, com clareza, naturalidade e profissionalismo. \
-              Caso perguntem sobre serviços, explique que a VS ALPHA atua com gestão de pessoas nas áreas de logística, limpeza, recepção e apoio operacional."
+            content: `Você é o agente virtual da empresa VS ALPHA — Impulsionando Resultados.
+            Utilize as informações abaixo como base de conhecimento para responder perguntas sobre a empresa:
+
+            ${baseVSAlpha}
+            `
           },
           { role: "user", content: message }
         ]
@@ -86,7 +99,7 @@ app.post("/webhook", async (req, res) => {
     const reply = gptResponse.data.choices[0].message.content.trim();
     console.log(`💬 Resposta da IA: ${reply}`);
 
-    // 📤 6. Envia a resposta pelo WhatsApp via Z-API
+    // 📤 Envia a resposta pelo WhatsApp via Z-API
     await axios.post(
       API_ZAPI,
       { phone, message: reply },
@@ -96,12 +109,12 @@ app.post("/webhook", async (req, res) => {
     console.log(`✅ Mensagem enviada para ${phone}`);
     res.sendStatus(200);
   } catch (error) {
-    console.error("❌ Erro:", error.response?.data || error.message);
+    console.error("❌ Erro no processamento:", error.response?.data || error.message);
     res.sendStatus(500);
   }
 });
 
-// ⚙️ Porta automática (Render define)
+// ⚙️ Porta (Render define automaticamente)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
   console.log(`🚀 Servidor VS ALPHA rodando na porta ${PORT}`)
