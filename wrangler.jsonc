@@ -3,6 +3,13 @@
   "main": "worker.js",
   "compatibility_date": "2026-02-11",
 
+  "kv_namespaces": [
+    {
+      "binding": "CLEANER_KV",
+      "id": "7a6ea9bc4bc34189a55bc40cc73ad27d"
+    }
+  ],
+
   "durable_objects": {
     "bindings": [
       {
@@ -14,8 +21,8 @@
 
   "migrations": [
     {
-      "tag": "v1",
-      "new_sqlite_classes": ["PhoneBuffer"]
+      "tag": "v2",
+      "new_sqlite_classes": []
     }
   ]
 }
