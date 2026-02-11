@@ -1,0 +1,21 @@
+{
+  "name": "vsalpha",
+  "main": "worker.js",
+  "compatibility_date": "2026-02-11",
+
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PHONE_BUFFER",
+        "class_name": "PhoneBuffer"
+      }
+    ]
+  },
+
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["PhoneBuffer"]
+    }
+  ]
+}
