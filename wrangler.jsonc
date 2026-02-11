@@ -21,6 +21,10 @@
 
   "migrations": [
     {
+      "tag": "v1",
+      "new_sqlite_classes": ["PhoneBuffer"]
+    },
+    {
       "tag": "v2",
       "new_sqlite_classes": []
     }
